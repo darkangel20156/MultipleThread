@@ -28,6 +28,8 @@ class MainActivity : AppCompatActivity(), ServerCallback, ClientCallback {
     //Is the Socket service connected?
     private var connectSocket = false
 
+    private var isOpened = false
+
     //Message list
     private val messages = ArrayList<Message>()
     //Message adapter
@@ -70,6 +72,7 @@ class MainActivity : AppCompatActivity(), ServerCallback, ClientCallback {
                 // Note: You might want to handle errors or exceptions if any
                 // during the startServer operation
                 SocketServer.startServer(this)
+                SocketServer.sendToAllClients("SERVER_OPEN")
                 updateUIAfterServerStarted()
                 true
             }
@@ -81,6 +84,14 @@ class MainActivity : AppCompatActivity(), ServerCallback, ClientCallback {
             // Disable the button temporarily to prevent multiple clicks
             binding.btnConnectService.isEnabled = false
 
+            val ip = binding.etIpAddress.text.toString()
+            if (ip.isEmpty()) {
+                showMsg("Please enter the IP address")
+                binding.btnConnectService.isEnabled = true
+                return@setOnClickListener
+            }
+
+            SocketClient.connectServer(ip, this)
             // Check if the server is open before attempting to connect
             if (!openSocket) {
                 showMsg("The service is not currently open")
@@ -93,14 +104,6 @@ class MainActivity : AppCompatActivity(), ServerCallback, ClientCallback {
                 updateUIAfterConnectionClosed()
                 false
             } else {
-                val ip = binding.etIpAddress.text.toString()
-                if (ip.isEmpty()) {
-                    showMsg("Please enter the IP address")
-                    binding.btnConnectService.isEnabled = true
-                    return@setOnClickListener
-                }
-
-                SocketClient.connectServer(ip, this)
                 updateUIAfterConnectionOpened()
                 true
             }
@@ -189,6 +192,14 @@ class MainActivity : AppCompatActivity(), ServerCallback, ClientCallback {
     private fun intToIp(ip: Int) =
         "${(ip and 0xFF)}.${(ip shr 8 and 0xFF)}.${(ip shr 16 and 0xFF)}.${(ip shr 24 and 0xFF)}"
 
+
+    private fun isServerOpened(msg : String) {
+        if  (msg.equals("SEVER_OPEN")) {
+            isOpened = true
+        } else {
+            isOpened = false
+        }
+    }
     /**
      * Receive messages from the client
      */
@@ -197,7 +208,10 @@ class MainActivity : AppCompatActivity(), ServerCallback, ClientCallback {
     /**
      * Receive messages from the server
      */
-    override fun receiveServerMsg(msg: String) = updateList(1, msg)
+    override fun receiveServerMsg(msg: String) {
+        isServerOpened(msg)
+        updateList(1, msg)
+    }
 
 
     override fun otherMsg(msg: String) {

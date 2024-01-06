@@ -3,12 +3,15 @@ package com.example.test_multithread.server
 
 import android.util.Log
 import android.widget.Toast
+import com.example.test_multithread.client.SocketClient
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
 /**
  * Socket server
  */
@@ -60,28 +63,51 @@ object SocketServer {
 //        return result
 //    }
 
+//    fun startServer(callback: ServerCallback): Boolean {
+//        mCallback = callback
+//        executorService.execute {
+//            try {
+//                serverSocket = ServerSocket(SOCKET_PORT)
+//                while (result) {
+//                    socket = serverSocket?.accept()
+//                    mCallback.otherMsg("${socket?.inetAddress} to connected")
+//                    val clientThread = ServerThread(socket!!, mCallback)
+//                    clientThreads.add(clientThread)
+//                    Log.d(TAG, "The value of clientThreads: " + clientThreads);
+//                    print("value: $clientThreads")
+//                    clientThread.start()
+//                }
+//            } catch (e: IOException) {
+//                e.printStackTrace()
+//                result = false
+//            }
+//        }
+//        return result
+//    }
+
     fun startServer(callback: ServerCallback): Boolean {
         mCallback = callback
-        executorService.execute {
-            try {
-                serverSocket = ServerSocket(SOCKET_PORT)
-                while (result) {
-                    socket = serverSocket?.accept()
-                    mCallback.otherMsg("${socket?.inetAddress} to connected")
-                    val clientThread = ServerThread(socket!!, mCallback)
-                    clientThreads.add(clientThread)
-                    Log.d(TAG, "The value of clientThreads: " + clientThreads);
-                    print("value: $clientThreads")
-                    clientThread.start()
+        if (!executorService.isShutdown && !serverExecutor.isShutdown) {
+            serverExecutor.execute {
+                try {
+                    serverSocket = ServerSocket(SOCKET_PORT)
+                    while (result) {
+                        socket = serverSocket?.accept()
+                        mCallback.otherMsg("${socket?.inetAddress} to connected")
+                        val clientThread = ServerThread(socket!!, mCallback)
+                        clientThreads.add(clientThread)
+                        Log.d(TAG, "The value of clientThreads: $clientThreads")
+                        print("value: $clientThreads")
+                        clientThread.start()
+                    }
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                    result = false
                 }
-            } catch (e: IOException) {
-                e.printStackTrace()
-                result = false
             }
         }
         return result
     }
-
 //    fun startServer(callback: ServerCallback): Boolean {
 //        mCallback = callback
 //
@@ -124,9 +150,26 @@ object SocketServer {
 //    }
 
     fun stopServer() {
-        serverExecutor.shutdownNow()
-        executorService.shutdownNow()
-        // Rest of your cleanup code...
+        result = false
+
+        for (clientThread in clientThreads) {
+            clientThread.stopThread()
+        }
+
+        // Shutdown executor services gracefully
+        executorService.shutdown()
+        serverExecutor.shutdown()
+
+        try {
+            // Optionally, wait for termination and handle interrupted exception
+            executorService.awaitTermination(10, TimeUnit.SECONDS)
+            serverExecutor.awaitTermination(10, TimeUnit.SECONDS)
+        } catch (e: InterruptedException) {
+            e.printStackTrace()
+        }
+
+        serverSocket?.close()
+        clientThreads.clear()
     }
 
     /**
@@ -135,6 +178,8 @@ object SocketServer {
     fun sendToAllClients(msg: String) {
         for (clientThread in clientThreads) {
             clientThread.sendToClient(msg)
+            mCallback.otherMsg("toServer: $msg")
+
         }
     }
 
